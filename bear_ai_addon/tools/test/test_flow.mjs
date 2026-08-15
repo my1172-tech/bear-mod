@@ -129,9 +129,10 @@ ok(stuckSeen === 0, `道中で詰まらなかった (詰まり ${stuckSeen} 回)
       dim.__set({ x, y: G + 5, z }, "minecraft:oak_planks"); // 屋根
     }
   }
-  // 南面の真ん中に2段窓。地面(G+1)から数えて 2段目(G+2)と3段目(G+3)。
+  // 南面の真ん中に**ガラス1段のふつうの窓**(地面から3段目)。
+  // 生成側の55%はこの形。ガラスだけを割ると穴が1段で通れないので、
+  // 熊が窓枠ごと上下1段を押し広げて入れることを見る。
   const wx = BX + 3, wz = BZ;
-  dim.__set({ x: wx, y: G + 2, z: wz }, "minecraft:light_blue_stained_glass");
   dim.__set({ x: wx, y: G + 3, z: wz }, "minecraft:light_blue_stained_glass");
 
   const wchest = { x: BX + 3, y: G + 1, z: BZ + 4 };
@@ -158,24 +159,27 @@ ok(stuckSeen === 0, `道中で詰まらなかった (詰まり ${stuckSeen} 回)
   ok(wseen.has("ENTER_HOUSE"), "ドアが無くても入口(窓)を見つけた");
   ok(wrec.entryKind === "window" || wseen.has("SEARCH_CHEST"),
     `窓を入口として扱った (${wrec.entryKind})`);
-  const glassGone =
+  const holeOpen =
     dim.__typeAt({ x: wx, y: G + 2, z: wz }) === "minecraft:air" &&
-    dim.__typeAt({ x: wx, y: G + 3, z: wz }) === "minecraft:air";
-  ok(glassGone, "窓ガラスを2段とも割った");
+    dim.__typeAt({ x: wx, y: G + 3, z: wz }) === "minecraft:air" &&
+    dim.__typeAt({ x: wx, y: G + 4, z: wz }) === "minecraft:air";
+  ok(holeOpen, "ガラス1段の窓を上下に押し広げて3段の穴にした");
 
-  // **壁は1ブロックも壊していないこと。** 「壁を壊して入る」にしない、が要件。
+  // **壊れたのは窓の柱だけ。** ほかの壁に手を出していないこと。
   let wallLost = 0;
   for (let x = BX; x <= BX + 6; x++) {
     for (let z = BZ; z <= BZ + 6; z++) {
       const wall = x === BX || x === BX + 6 || z === BZ || z === BZ + 6;
       if (!wall) continue;
       for (let y = G + 1; y <= G + 4; y++) {
-        if (x === wx && z === wz && (y === G + 2 || y === G + 3)) continue; // 窓
+        if (x === wx && z === wz) continue; // 窓の柱
         if (dim.__typeAt({ x, y, z }) !== "minecraft:stone_bricks") wallLost++;
       }
     }
   }
-  ok(wallLost === 0, `壁は1ブロックも壊していない (${wallLost} 個)`);
+  ok(wallLost === 0, `窓の柱以外の壁は無傷 (${wallLost} 個)`);
+  ok(dim.__typeAt({ x: wx, y: G + 1, z: wz }) === "minecraft:stone_bricks",
+    "窓の柱でも、足元の壁は残る");
   ok(wrec.stolen >= 2, `窓から入って食料を持ち去った (${wrec.stolen} 個)`);
   // 取られなかったものは、チェストの中か床のどちらかに残る(壊されるとこぼれる)
   const stillThere = [

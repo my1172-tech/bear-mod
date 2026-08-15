@@ -218,40 +218,49 @@ for (let i = 0; i < STUCK_LIMIT + 2; i++) {
 }
 ok(becameStuck === true, "同じ熊でも、止まる理由が無ければ詰まりと分かる");
 
-// --- 15. 窓は「入れる窓」だけ。壁は壊さない -------------------------------
-// **ここを緩めると「壁を壊して入る」に化ける。** 腰高窓(足元から2段以上上)は
-// 覗けても入れないので、入口にしてはいけない。
+// --- 15. 窓の開口は「ガラス＋上下1段」より広げない -------------------------
+// **ここが唯一、ガラス以外を壊す場所。** 広げすぎると家が崩れるので、
+// 上下1段・全体3段までに収まっていることを機械で見張る。
 {
   const BX = 800, BZ = 800;
-  // 腰高窓: 地面(G+1)から3段目(G+3)にだけガラス。下は壁。
-  for (let y = G + 1; y <= G + 4; y++) dim.__set({ x: BX, y, z: BZ }, "minecraft:stone_bricks");
+  // ふつうの家の窓: ガラス1段(地面から3段目 = G+3)。上下は壁。
+  for (let y = G + 1; y <= G + 6; y++) dim.__set({ x: BX, y, z: BZ }, "minecraft:stone_bricks");
   dim.__set({ x: BX, y: G + 3, z: BZ }, "minecraft:light_blue_stained_glass");
-  ok(windowOpening(dim, { x: BX, y: G + 3, z: BZ }) === null,
-    "腰高窓(足元から2段上)は入口にしない");
 
-  // 2段窓なら入口になる
-  const CX = 810, CZ = 810;
-  for (let y = G + 1; y <= G + 4; y++) dim.__set({ x: CX, y, z: CZ }, "minecraft:stone_bricks");
-  dim.__set({ x: CX, y: G + 2, z: CZ }, "minecraft:light_blue_stained_glass");
-  dim.__set({ x: CX, y: G + 3, z: CZ }, "minecraft:light_blue_stained_glass");
-  const open = windowOpening(dim, { x: CX, y: G + 3, z: CZ });
-  ok(open !== null && open.y === G + 2 && open.height === 2,
-    `2段窓は入口になる (${open ? open.y - G + "段目から" + open.height + "段" : "null"})`);
+  const open = windowOpening(dim, { x: BX, y: G + 3, z: BZ });
+  ok(open !== null, "ガラス1段のふつうの窓でも入口になる");
+  ok(open.y === G + 2 && open.height === 3,
+    `開口はガラスの上下1段まで (${open ? `${open.y - G}段目から${open.height}段` : "null"})`);
 
-  // 割るのはガラスだけ。壁は残る
-  breakWindow(dim, { x: CX, y: G + 2, z: CZ }, open);
-  ok(dim.__typeAt({ x: CX, y: G + 2, z: CZ }) === "minecraft:air"
-    && dim.__typeAt({ x: CX, y: G + 3, z: CZ }) === "minecraft:air", "窓は2段とも割れた");
-  ok(dim.__typeAt({ x: CX, y: G + 1, z: CZ }) === "minecraft:stone_bricks",
-    "**窓の下の壁は壊さない**");
-  ok(dim.__typeAt({ x: CX, y: G + 4, z: CZ }) === "minecraft:stone_bricks",
-    "**窓の上の壁も壊さない**");
+  breakWindow(dim, { x: BX, y: G + 3, z: BZ }, open);
+  ok(dim.__typeAt({ x: BX, y: G + 2, z: BZ }) === "minecraft:air"
+    && dim.__typeAt({ x: BX, y: G + 3, z: BZ }) === "minecraft:air"
+    && dim.__typeAt({ x: BX, y: G + 4, z: BZ }) === "minecraft:air",
+    "ガラスと上下1段が抜けて3段の穴になる");
+  ok(dim.__typeAt({ x: BX, y: G + 1, z: BZ }) === "minecraft:stone_bricks",
+    "**足元の壁は残る**(床に穴を開けない)");
+  ok(dim.__typeAt({ x: BX, y: G + 5, z: BZ }) === "minecraft:stone_bricks",
+    "**2段以上は広げない**");
 
-  // ガラスでない場所を割ろうとしても何も起きない
-  const before = dim.__typeAt({ x: BX, y: G + 1, z: BZ });
-  breakWindow(dim, { x: BX, y: G + 1, z: BZ }, { y: G + 1, height: 2 });
-  ok(dim.__typeAt({ x: BX, y: G + 1, z: BZ }) === before,
-    "ガラスでなければ割らない(壁に穴を開けない)");
+  // ガラス張りのビル: ガラスが延々と続いても、開ける穴は3段まで
+  const TX = 820, TZ = 820;
+  for (let y = G + 1; y <= G + 40; y++) dim.__set({ x: TX, y, z: TZ }, "minecraft:blue_stained_glass");
+  const tall = windowOpening(dim, { x: TX, y: G + 5, z: TZ });
+  ok(tall !== null && tall.height <= 3,
+    `ガラス張りでも穴は3段まで (${tall ? tall.height : "null"} 段)`);
+
+  // 岩盤は壊さない
+  const RX = 830, RZ = 830;
+  dim.__set({ x: RX, y: G + 1, z: RZ }, "minecraft:bedrock");
+  dim.__set({ x: RX, y: G + 2, z: RZ }, "minecraft:glass");
+  breakWindow(dim, { x: RX, y: G + 2, z: RZ }, { y: G + 1, height: 2 });
+  ok(dim.__typeAt({ x: RX, y: G + 1, z: RZ }) === "minecraft:bedrock", "岩盤は壊さない");
+
+  // 地下の窓は入口にしない
+  const UX = 840, UZ = 840;
+  dim.__set({ x: UX, y: G - 5, z: UZ }, "minecraft:glass");
+  ok(windowOpening(dim, { x: UX, y: G - 5, z: UZ }) === null,
+    "地面より下の窓は入口にしない");
 }
 
 report("逆テスト");

@@ -502,7 +502,7 @@ function enterWindowTick(bear, rec, now, stuck) {
   const d = distXZ(bear.location, win);
 
   if (d <= 2.5) {
-    const stillGlass = windowStillThere(bear.dimension, win);
+    const stillGlass = windowStillThere(bear.dimension, win, rec.opening);
 
     if (stillGlass) {
       // 叩き割るのに少し時間をかける(一瞬で消えると割った感じが出ない)。

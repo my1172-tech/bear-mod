@@ -10,7 +10,8 @@
  */
 
 import {
-  BROKEN_BLOCK, DOOR_UNBREAKABLE, WINDOW_ENTRY, WINDOW_STEP_UP,
+  BROKEN_BLOCK, DOOR_UNBREAKABLE, WINDOW_ENTRY, WINDOW_MARGIN, WINDOW_OPEN_MAX,
+  WINDOW_STEP_UP,
 } from "./config.js";
 import { isDoor, isWindow } from "./routes.js";
 import { getBlock, groundY, isAir, topmost, tryDo, typeIdAt } from "./util.js";
@@ -96,24 +97,33 @@ export function frontPoint(dimension, door) {
 /**
  * その窓から**中へ入れるか**を見て、割るべき高さを返す。入れなければ null。
  *
- * 条件は2つだけ。
- *   1. 窓の下端が、外に立った熊の足元から WINDOW_STEP_UP(1) 段以内にあること
- *      — 統合版のモブが登れるのは1段まで。腰高窓は覗けても入れない
- *   2. その上にもう1つ、ガラスか空気があること — 熊は高さ1.4。1段の穴は通れない
+ * 熊は窓枠ごと腕で押し広げる。開口は**ガラスの連なりの上下 WINDOW_MARGIN(1) 段**まで。
+ * ふつうの家の窓はガラス1段(地面から3段目)なので、上下に1段ずつ広げて
+ * 3段の穴にする。これで高さ1.4の熊が通れる。
  *
- * **壁は数に入れない。** 割るのはガラスだけで、足りなければその窓は諦める。
+ * 守る線は3つ。
+ *   1. 開口の下端が、外に立った熊の足元から WINDOW_STEP_UP(1) 段以内
+ *      — 統合版のモブが登れるのは1段まで。ここを超えると割ったのに入れない
+ *   2. **外の地面より下は掘らない** — 掘ると窓ではなく穴になる
+ *   3. 高さは WINDOW_OPEN_MAX(3) 段まで — ガラス張りのビルで壁面が丸ごと消えないように
  *
- * @returns {{y:number, height:number}|null} 割り始める高さと、割る段数
+ * @returns {{y:number, height:number}|null} 壊し始める高さと、壊す段数
  */
 export function windowOpening(dimension, win) {
   if (!WINDOW_ENTRY) return null;
 
-  // 窓の下端を探す(下へガラスが続くならそちらが下端)
-  let bottom = win.y;
-  for (let i = 0; i < 4; i++) {
-    const below = { x: win.x, y: bottom - 1, z: win.z };
-    if (!isWindow(typeIdAt(dimension, below))) break;
-    bottom = below.y;
+  // ガラスの連なり(上下)を求める
+  let glassLow = win.y;
+  let glassHigh = win.y;
+  for (let i = 0; i < 8; i++) {
+    const p = { x: win.x, y: glassLow - 1, z: win.z };
+    if (!isWindow(typeIdAt(dimension, p))) break;
+    glassLow = p.y;
+  }
+  for (let i = 0; i < 8; i++) {
+    const p = { x: win.x, y: glassHigh + 1, z: win.z };
+    if (!isWindow(typeIdAt(dimension, p))) break;
+    glassHigh = p.y;
   }
 
   // 外に立ったときの足元の高さ。窓の1つ外側の柱で測る。
@@ -121,49 +131,77 @@ export function windowOpening(dimension, win) {
   for (const d of DIRS) {
     const y = groundY(dimension, win.x + d.dx, win.z + d.dz, win.y);
     if (y === null) continue;
-    if (standY === null || Math.abs(y - bottom) < Math.abs(standY - bottom)) standY = y;
+    if (standY === null || Math.abs(y - glassLow) < Math.abs(standY - glassLow)) standY = y;
   }
   if (standY === null) return null;
+  if (glassHigh < standY) return null; // 窓が足元より下(地下)
 
-  if (bottom < standY) return null;                    // 窓が足元より下(地下)
-  if (bottom - standY > WINDOW_STEP_UP) return null;   // 登れない高さ。腰高窓
+  // ガラスの上下 WINDOW_MARGIN 段まで押し広げる。
+  // **外の地面より下は掘らない。** 掘ると窓ではなく穴になる。
+  const bottom = Math.max(glassLow - WINDOW_MARGIN, standY);
+  if (bottom - standY > WINDOW_STEP_UP) return null; // 登れない高さ
 
-  // 2段ぶんの穴を作れるか。上がガラスなら割る、空気ならそのまま使う。
-  const upper = { x: win.x, y: bottom + 1, z: win.z };
-  const upperId = typeIdAt(dimension, upper);
-  if (upperId === null) return null;
-  if (!isWindow(upperId) && !isAir(upperId)) return null; // 上は壁。壁は壊さない
+  // 高さは上限で頭打ちにする(ガラス張りのビルで壁面が丸ごと消えないように)
+  const top = Math.min(glassHigh + WINDOW_MARGIN, bottom + WINDOW_OPEN_MAX - 1);
+  const height = top - bottom + 1;
+  if (height < 2) return null; // 熊は高さ1.4。1段の穴は通れない
 
-  return { y: bottom, height: isWindow(upperId) ? 2 : 1 };
+  return { y: bottom, height };
 }
 
+/** 熊にも壊せないブロック。ここを壊すとワールドが壊れる。 */
+const UNBREAKABLE = new Set([
+  "minecraft:bedrock", "minecraft:barrier", "minecraft:command_block",
+  "minecraft:structure_block", "minecraft:light_block", "minecraft:deny", "minecraft:allow",
+]);
+
 /**
- * 窓を割る。**ガラスだけを割る。** 壁は1ブロックも壊さない。
- * @returns {boolean} 割れたか
+ * 窓をぶち抜く。ガラスと、その**上下1段(WINDOW_MARGIN)ぶんの窓枠**を壊す。
+ *
+ * ガラスだけを割ると、ふつうの家(ガラス1段)では穴が1段しか開かず、
+ * 高さ1.4の熊は通れない。熊が腕で窓枠ごと押し広げるぶんとして、
+ * windowOpening が決めた範囲だけを壊す。**それ以外の壁には触らない。**
+ *
+ * @returns {boolean} 壊せたか
  */
 export function breakWindow(dimension, win, opening) {
   if (!WINDOW_ENTRY || !opening) return false;
   let broke = false;
+  let glass = false;
   for (let i = 0; i < opening.height; i++) {
     const pos = { x: win.x, y: opening.y + i, z: win.z };
-    if (!isWindow(typeIdAt(dimension, pos))) continue;
-    const ok = tryDo("窓を割る", () => {
+    const id = typeIdAt(dimension, pos);
+    if (id === null || isAir(id)) continue;
+    if (UNBREAKABLE.has(id)) continue;
+    const ok = tryDo("窓をぶち抜く", () => {
       dimension.getBlock(pos).setType(BROKEN_BLOCK);
       return true;
     });
-    broke = broke || !!ok;
+    if (ok) {
+      broke = true;
+      if (isWindow(id)) glass = true;
+    }
   }
   if (broke) {
-    tryDo("ガラスの割れる音", () =>
-      dimension.playSound("random.glass", { x: win.x + 0.5, y: win.y + 0.5, z: win.z + 0.5 })
+    tryDo("割れる音", () =>
+      dimension.playSound(glass ? "random.glass" : "mob.zombie.woodbreak",
+        { x: win.x + 0.5, y: opening.y + 0.5, z: win.z + 0.5 })
     );
   }
   return broke;
 }
 
-/** その窓がまだ残っているか(他の熊が割ったあとを追いかけないため)。 */
-export function windowStillThere(dimension, win) {
-  return isWindow(typeIdAt(dimension, win));
+/**
+ * その窓がまだ塞がっているか(他の熊が割ったあとを叩き続けないため)。
+ * ガラスに限らず、開口の中に何か残っていれば「まだ塞がっている」。
+ */
+export function windowStillThere(dimension, win, opening = null) {
+  if (!opening) return isWindow(typeIdAt(dimension, win));
+  for (let i = 0; i < opening.height; i++) {
+    const id = typeIdAt(dimension, { x: win.x, y: opening.y + i, z: win.z });
+    if (id !== null && !isAir(id)) return true;
+  }
+  return false;
 }
 
 /**
