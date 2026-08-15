@@ -81,8 +81,10 @@ for s in states:
 update = src[src.index("export function update("):]
 update = update[: update.index("\n// ---")] if "\n// ---" in update else update
 
+# 引数の並びまで決め打ちすると、引数を1つ足しただけで検査が「見つからない」と
+# 言い出す（実際に findPrey に引数を足して踏んだ）。呼び出しの頭だけを見る。
 pos_flee = update.find("rec.fleeUntil > now")
-pos_prey = update.find("findPrey(bear, rec)")
+pos_prey = update.find("findPrey(bear, rec")
 pos_switch = update.find("switch (rec.state)")
 
 if pos_flee < 0 or pos_prey < 0 or pos_switch < 0:

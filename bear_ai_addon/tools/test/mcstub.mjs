@@ -88,6 +88,8 @@ class Entity {
     if (opts?.dimension) this.dimension = opts.dimension;
   }
   triggerEvent(name) { this.events.push(name); }
+  /** 向いている方向。既定は +z。試験では e.view で変えられる。 */
+  getViewDirection() { return this.view ?? { x: 0, y: 0, z: 1 }; }
   remove() {
     this.isValid = false;
     this.dimension.__entities.delete(this.id);
@@ -111,6 +113,8 @@ class Entity {
     if (name === "minecraft:health") {
       return { currentValue: this.health, effectiveMax: 20, setCurrentValue: (v) => { this.health = v; } };
     }
+    // 落ちているアイテムの中身。熊は匂いでこれを嗅ぎ分ける
+    if (name === "minecraft:item" && this.itemStack) return { itemStack: this.itemStack };
     return undefined;
   }
   /** その熊の今のAIの型(roam/hunt/flee/still)。試験の物理が使う。 */
@@ -292,6 +296,14 @@ export const sim = {
       }
     }
     physics();
+  },
+
+  /** 落ちているアイテムを置く(熊が匂いで嗅ぎつける対象)。 */
+  dropItem(location, typeId) {
+    const dim = world.getDimension("minecraft:overworld");
+    const e = dim.spawnEntity("minecraft:item", location);
+    e.itemStack = new ItemStack(typeId, 1);
+    return e;
   },
 
   spawnPlayer(location) {

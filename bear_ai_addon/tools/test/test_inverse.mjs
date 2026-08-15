@@ -15,9 +15,10 @@ import { lootChest, maybeBreakChest } from "../../behavior_packs/bear_bp/scripts
 import { breakDoor, breakWindow, windowOpening } from "../../behavior_packs/bear_bp/scripts/house.js";
 import { checkStuck, setWaypoint, unstick } from "../../behavior_packs/bear_bp/scripts/nav.js";
 import { embeddedAt, freeSpot } from "../../behavior_packs/bear_bp/scripts/util.js";
+import { decayAlert, raiseAlert, strongestSmell } from "../../behavior_packs/bear_bp/scripts/sense.js";
 import {
   TICK_INTERVAL, ESCAPE_THRESHOLD, PENDING_TIMEOUT,
-  BEAR_WIDTH, BEAR_HEIGHT, STUCK_LIMIT,
+  BEAR_WIDTH, BEAR_HEIGHT, STUCK_LIMIT, ALERT_DECAY,
 } from "../../behavior_packs/bear_bp/scripts/config.js";
 
 const dim = sim.dimension();
@@ -261,6 +262,62 @@ ok(becameStuck === true, "同じ熊でも、止まる理由が無ければ詰ま
   dim.__set({ x: UX, y: G - 5, z: UZ }, "minecraft:glass");
   ok(windowOpening(dim, { x: UX, y: G - 5, z: UZ }) === null,
     "地面より下の窓は入口にしない");
+}
+
+// --- 16. 匂いは万能ではない -------------------------------------------------
+// **嗅覚が壁を通るからといって、何でも嗅ぎつけてよいわけではない。**
+// 届く距離・対象の種類・クリエイティブ除外は、視界と同じだけ厳しく守る。
+{
+  const NX = 7000, NZ = 7000;
+  const nose = dim.spawnEntity("bear:bear", { x: NX, y: G + 1, z: NZ });
+  const recN = makeRecord(nose);
+
+  // 何も無ければ匂わない
+  ok(strongestSmell(nose, recN, 50000) === null, "何も無ければ匂わない");
+
+  // 届かない距離の牛は嗅がない(牛の嗅覚は200)
+  const farCow = dim.spawnEntity("minecraft:cow", { x: NX + 300, y: G + 1, z: NZ });
+  ok(strongestSmell(nose, recN, 50100) === null,
+    "300m先の牛は嗅がない(届く距離を超えている)");
+  farCow.remove();
+
+  // 食料でない落とし物は嗅がない
+  sim.dropItem({ x: NX + 5, y: G + 1, z: NZ }, "minecraft:iron_ingot");
+  ok(strongestSmell(nose, recN, 50200) === null, "鉄は食料でないので匂わない");
+
+  // 食料なら嗅ぐ（＝上が「常に匂わない」ではないことの確認）
+  sim.dropItem({ x: NX + 5, y: G + 1, z: NZ + 1 }, "minecraft:cooked_beef");
+  const got = strongestSmell(nose, recN, 50300);
+  ok(got !== null, `落ちている焼いた肉は匂う (${got ? got.kind : "null"})`);
+
+  // クリエイティブのプレイヤーは匂いでも対象にしない
+  const NX2 = 7200, NZ2 = 7200;
+  const n2 = dim.spawnEntity("bear:bear", { x: NX2, y: G + 1, z: NZ2 });
+  const rec2b = makeRecord(n2);
+  const cre = sim.spawnPlayer({ x: NX2 + 3, y: G + 1, z: NZ2 });
+  cre.gameMode = "creative";
+  ok(strongestSmell(n2, rec2b, 50400) === null,
+    "クリエイティブのプレイヤーは匂いでも狙わない");
+  cre.gameMode = "survival";
+  ok(strongestSmell(n2, rec2b, 50500) !== null,
+    "サバイバルなら匂う（＝上が常にnullではない）");
+  cre.remove();
+}
+
+// --- 17. 警戒の段階は勝手に上がりも下がりもしない ----------------------------
+{
+  const rec = makeRecord(dim.spawnEntity("bear:bear", { x: 7400, y: G + 1, z: 7400 }));
+  ok(rec.alert === "calm", "湧いた直後は通常");
+
+  raiseAlert(rec, "spotted", 1000);
+  ok(rec.alert === "spotted", "見つけたら発見まで上がる");
+  raiseAlert(rec, "alert", 1000);
+  ok(rec.alert === "spotted", "**下の段階では下がらない**(匂いで発見が取り消されない)");
+
+  decayAlert(rec, 1000 + ALERT_DECAY - 1);
+  ok(rec.alert === "spotted", "時間が経つまでは下がらない");
+  decayAlert(rec, 1000 + ALERT_DECAY + 1);
+  ok(rec.alert === "alert", "時間が経つと1段だけ下がる");
 }
 
 report("逆テスト");

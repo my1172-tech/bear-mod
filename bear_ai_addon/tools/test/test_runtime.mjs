@@ -8,9 +8,11 @@
 
 import { sim } from "./mcstub.mjs";
 import { ok, near, report } from "./assert.mjs";
-import { BEAR_DAMAGE, SCAN_BUDGET } from "../../behavior_packs/bear_bp/scripts/config.js";
+import { BEAR_DAMAGE, SCAN_BUDGET, TICK_INTERVAL } from "../../behavior_packs/bear_bp/scripts/config.js";
+import { makeRecord } from "../../behavior_packs/bear_bp/scripts/bear.js";
 import { maybeBreakChest, isFood } from "../../behavior_packs/bear_bp/scripts/loot.js";
 import { ItemStack } from "./mcstub.mjs";
+import { seenPlayer, strongestSmell } from "../../behavior_packs/bear_bp/scripts/sense.js";
 
 const dim = sim.dimension();
 const G = sim.GROUND_Y;
@@ -179,6 +181,86 @@ sim.allowSpawn("bear:lure");
   ok(msg.includes("目の前に熊"), "出したことを座標付きで答える");
   ok(msg.includes("名札だけ見える"),
     "見えないときの見分け方(名札だけ見える=RPが効いていない)を答える");
+}
+
+// --- 視界と嗅覚 -------------------------------------------------------------
+// **視界は壁を通らない。嗅覚は通る。** そこが分かれていないと
+// 「家の中で焼肉していると熊が寄ってくる」が成立しない。
+{
+  const BX = 6000, BZ = 6000;
+  const eye = dim.spawnEntity("bear:bear", { x: BX, y: G + 1, z: BZ });
+  eye.view = { x: 0, y: 0, z: 1 };   // +z を向いている
+  const recE = makeRecord(eye);
+
+  // 正面 20m のプレイヤーは見える
+  const front = sim.spawnPlayer({ x: BX, y: G + 1, z: BZ + 20 });
+  ok(seenPlayer(eye, recE) === front, "正面のプレイヤーは見える");
+
+  // 同じ距離でも**真後ろ**は見えない
+  front.location = { x: BX, y: G + 1, z: BZ - 20 };
+  ok(seenPlayer(eye, recE) === null, "真後ろのプレイヤーは見えない(視野角)");
+
+  // 正面に戻して、間に壁を立てると見えなくなる
+  front.location = { x: BX, y: G + 1, z: BZ + 20 };
+  for (let y = G + 1; y <= G + 4; y++) {
+    for (let x = BX - 2; x <= BX + 2; x++) dim.__set({ x, y, z: BZ + 10 }, "minecraft:stone");
+  }
+  ok(seenPlayer(eye, recE) === null, "壁の向こうのプレイヤーは見えない(見通し)");
+
+  // 状態が上がると遠くまで見える
+  for (let y = G + 1; y <= G + 4; y++) {
+    for (let x = BX - 2; x <= BX + 2; x++) dim.__set({ x, y, z: BZ + 10 }, "minecraft:air");
+  }
+  front.location = { x: BX, y: G + 1, z: BZ + 60 };
+  recE.alert = "calm";
+  const calmSees = seenPlayer(eye, recE);
+  recE.alert = "chase";
+  const chaseSees = seenPlayer(eye, recE);
+  ok(calmSees === null && chaseSees === front,
+    `60m先は 通常では見えず 追跡なら見える (通常:${calmSees ? "見える" : "見えない"} / 追跡:${chaseSees ? "見える" : "見えない"})`);
+  front.remove();
+
+  // --- 嗅覚は壁を通る -------------------------------------------------------
+  const NX = 6200, NZ = 6200;
+  const nose = dim.spawnEntity("bear:bear", { x: NX, y: G + 1, z: NZ });
+  nose.view = { x: 0, y: 0, z: 1 };
+  const recN = makeRecord(nose);
+
+  // 30m 先に「火の入ったかまど」を置き、その手前を壁で塞ぐ
+  dim.__set({ x: NX, y: G + 1, z: NZ + 30 }, "minecraft:lit_furnace");
+  for (let y = G + 1; y <= G + 4; y++) {
+    for (let x = NX - 3; x <= NX + 3; x++) dim.__set({ x, y, z: NZ + 20 }, "minecraft:stone");
+  }
+  // ほかの熊が走査の枠(同時3本)を埋めていると、料理の走査が始められない。
+  // ここで見たいのは匂いなので、先に片付ける。
+  for (const b of dim.getEntities({ type: "bear:bear" })) {
+    if (b !== nose && b !== eye) b.remove();
+  }
+  let smell = null;
+  let asked = 0;
+  for (let t = 30000; t < 31200; t++) {
+    tick();
+    if (t % TICK_INTERVAL === 0) {
+      smell = strongestSmell(nose, recN, t);
+      if (recN.cookingPending) asked++;
+    }
+    if (smell && smell.kind === "cooking") break;
+  }
+  ok(smell !== null && smell.kind === "cooking",
+    `壁の向こうの料理の匂いが届く (${smell ? smell.kind : "何も嗅がない"} / 走査を頼んだ ${asked} 回)`);
+  ok(seenPlayer(nose, recN) === null, "同じ場所でも姿は見えていない");
+
+  // --- 匂いの強さで選ぶ -----------------------------------------------------
+  // 近くの弱い匂い(人 強さ10)より、遠くの強い匂い(牛 強さ60)を選ぶ
+  const SX = 6400, SZ = 6400;
+  const pick = dim.spawnEntity("bear:bear", { x: SX, y: G + 1, z: SZ });
+  const recP = makeRecord(pick);
+  const near = sim.spawnPlayer({ x: SX + 6, y: G + 1, z: SZ });
+  dim.spawnEntity("minecraft:cow", { x: SX + 20, y: G + 1, z: SZ });
+  const got = strongestSmell(pick, recP, 40000);
+  ok(got !== null && got.kind === "cow",
+    `近くの人より 遠くの牛の匂いを選ぶ (${got ? got.kind : "null"})`);
+  near.remove();
 }
 
 report("動きの試験");

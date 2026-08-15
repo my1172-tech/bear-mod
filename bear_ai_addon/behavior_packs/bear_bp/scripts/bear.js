@@ -25,6 +25,7 @@ import {
 import { lootChest, maybeBreakChest } from "./loot.js";
 import { advanceWaypoint, arrived, checkStuck, setWaypoint, unstick } from "./nav.js";
 import { findTarget, fleePoint, isDoor, pickRoute, randomPoint, routeOf } from "./routes.js";
+import { decayAlert, raiseAlert, seenPlayer, strongestSmell, SMELL_LABEL } from "./sense.js";
 import { requestScan } from "./scan.js";
 import { traitsOf } from "./traits.js";
 import { alive, chance, clamp, distXZ, tryDo, typeIdAt } from "./util.js";
@@ -96,6 +97,12 @@ export function makeRecord(bear) {
     lastPos: null,
     buried: false,
     rescues: 0,
+    alert: "calm",
+    alertAt: 0,
+    smell: null,
+    smellAt: -1e9,
+    cooking: null,
+    cookingPending: false,
     knownDoors: [],
     looted: new Map(),
     targetDoor: null,
@@ -244,9 +251,19 @@ export function update(bear, rec, now) {
     return;
   }
 
+  // --- 感覚 ---------------------------------------------------------------
+  // 見えた／匂った、で警戒の段階が上がる。何も無い時間が続くと下がる。
+  // 段階が上がるほど視界は遠く・狭くなる(sense.js の SIGHT)。
+  // **見るのは1周期に1回だけ。** 見た結果で段階を上げてから、同じ目でもう一度
+  // 見ると、視野が狭まったせいで直前に見た相手を見失う(机上試験で踏んだ)。
+  decayAlert(rec, now);
+  const visible = seenPlayer(bear, rec);
+  if (visible) raiseAlert(rec, "spotted", now);
+
   // --- 優先順位2: 攻撃 ----------------------------------------------------
-  const prey = findPrey(bear, rec);
+  const prey = findPrey(bear, rec, visible);
   if (prey) {
+    raiseAlert(rec, "chase", now);
     if (rec.state !== "ATTACK") {
       rec.resume = rec.state;
       go(bear, rec, "ATTACK", "プレイヤーを見つけた");
@@ -342,8 +359,31 @@ function patrolTick(bear, rec, now, stuck) {
   planLeg(bear, rec, now);
 }
 
-/** 次の道のりの行き先を探して、目印を置く。 */
+/**
+ * 次の道のりの行き先を探して、目印を置く。
+ *
+ * **匂いがあれば、決めてあったルートより匂いを優先する。**
+ * 家の中で肉を焼いていれば、その建物へ寄ってくる（壁越しに匂うので、
+ * 熊はプレイヤーの姿を見ないまま近づいてくる）。
+ * 匂いにつられやすさは個体差（空腹・食料優先）で変わる。
+ */
 function planLeg(bear, rec, now) {
+  const nose = strongestSmell(bear, rec, now);
+  if (nose) {
+    const appetite = (rec.traits.hunger + rec.traits.foodSeeking) / 2;
+    // 点数(強さ÷距離)が高いほど、腹が減っているほど、匂いに従う
+    if (chance(clamp(nose.score * 0.6 + appetite * 0.35, 0, 0.95))) {
+      raiseAlert(rec, "alert", now);
+      if (setWaypoint(bear, rec, nose.pos)) {
+        rec.followingSmell = nose.kind;
+        log(rec, `${SMELL_LABEL[nose.kind] ?? nose.kind}の匂い → ` +
+          `${nose.pos.x},${nose.pos.y},${nose.pos.z}`);
+        return;
+      }
+    }
+  }
+  rec.followingSmell = null;
+
   const legs = routeOf(rec.route).legs;
   const kind = legs[rec.legIndex % legs.length];
   rec.pending = true;
@@ -636,23 +676,19 @@ function lootTick(bear, rec, now) {
 // ATTACK … 攻撃(狙いと殴りはバニラのAI、打撃力は main.js の当たり判定で足す)
 // ---------------------------------------------------------------------------
 
-/** 狙う相手を返す。攻撃性が高いほど遠くから寄ってくる。 */
-function findPrey(bear, rec) {
+/**
+ * 狙う相手を返す。
+ *
+ * **見えているかどうかで決める**(距離・視野角・見通し。sense.js)。
+ * 背後から忍び寄れば、すぐ近くまで気づかれない。壁の向こうにも気づかない。
+ *
+ * そのうえで、実際に襲いかかるのは**攻撃性で決まる間合い**に入ったときだけ。
+ * 遠くに見えているだけの相手には、まだ向かわない個体もいる。
+ */
+function findPrey(bear, rec, seen) {
+  if (!seen) return null;
   const reach = 8 + rec.traits.aggression * 16; // 8〜24ブロック
-  const players = tryDo("プレイヤーの検索", () =>
-    bear.dimension.getPlayers({ location: bear.location, maxDistance: reach })
-  ) ?? [];
-  let best = null;
-  let bestD = Infinity;
-  for (const p of players) {
-    if (!alive(p)) continue;
-    // クリエイティブ/観戦は狙わない
-    const mode = tryDo("モードの取得", () => p.getGameMode?.());
-    if (mode === "creative" || mode === "spectator") continue;
-    const d = distXZ(bear.location, p.location);
-    if (d < bestD) { best = p; bestD = d; }
-  }
-  return best;
+  return distXZ(bear.location, seen.location) <= reach ? seen : null;
 }
 
 /**

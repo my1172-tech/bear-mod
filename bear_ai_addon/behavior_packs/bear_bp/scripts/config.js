@@ -19,7 +19,7 @@
  * 分からなくなる。名乗らせて、ゲームの中から確かめられるようにしておく
  * (起動メッセージ・`/function bear_help`・`/function bear_status` に出る)。
  */
-export const VERSION = "0.5.0";
+export const VERSION = "0.6.0";
 
 /** 熊の実体。 */
 export const BEAR_TYPE = "bear:bear";
@@ -100,6 +100,106 @@ export const ESCAPE_TIME = 200;
 
 /** 逃走先の距離(ブロック)。市街地から離れる向きへこれだけ走る。 */
 export const ESCAPE_DISTANCE = 40;
+
+// ---------------------------------------------------------------------------
+// 探知（視界と嗅覚）
+// ---------------------------------------------------------------------------
+
+/**
+ * 視界。**状態が上がるほど遠くまで・狭い角度で見る**（対象に集中する）。
+ *
+ *   calm    通常     … 何も気づいていない。広く浅く
+ *   alert   警戒     … 匂いを嗅ぎ取った。首を上げて探す
+ *   spotted 発見     … プレイヤーを見つけた
+ *   chase   追跡     … 追いかけている。いちばん遠くまで届く
+ *
+ * fov は**視野角(度)**。真後ろは見えない。180 なら真横まで、120 なら斜め前まで。
+ * 視界は**壁を通らない**（嗅覚と違うのはここ）。
+ */
+export const SIGHT = {
+  calm: { range: 40, fov: 180 },
+  alert: { range: 64, fov: 140 },
+  spotted: { range: 90, fov: 120 },
+  chase: { range: 120, fov: 120 },
+};
+
+/**
+ * 嗅覚の届く距離(ブロック)。**視野角は無く、壁も通り抜ける。**
+ *
+ * 家の中で焼いている肉の匂いが外の熊に届く、というのがこの仕組みの肝。
+ * 市街地の目安（プレイヤー100 / 料理150 / 牛200）に合わせてある。
+ */
+export const SMELL_RANGE = {
+  cooking: 150,  // かまど・燻製器・焚き火が動いている（＝料理中）
+  carcass: 200,  // 落ちている肉・死体
+  cow: 200,
+  sheep: 130,
+  pig: 130,
+  animal: 110,   // その他の動物
+  food: 100,     // 落ちている食料
+  player: 100,
+};
+
+/**
+ * 匂いの強さ。**同じ距離なら強いほうへ向かう。**
+ * 実際の比べ方は「強さ ÷ 距離」で、遠くの強い匂いと近くの弱い匂いが釣り合う。
+ */
+export const SMELL_STRENGTH = {
+  cooking: 100,  // 焼いた肉
+  carcass: 90,
+  raw: 80,       // 生肉
+  fish: 70,
+  cow: 60,
+  sheep: 45,
+  pig: 45,
+  animal: 35,
+  fruit: 40,
+  player: 10,
+};
+
+/** 料理中とみなすブロック。統合版は火の入ったかまどが別のIDになる。 */
+export const COOKING_BLOCKS = [
+  "minecraft:lit_furnace", "minecraft:lit_smoker", "minecraft:lit_blast_furnace",
+  "minecraft:campfire", "minecraft:soul_campfire",
+];
+
+/** 匂いをたどる動物。名前ごとに強さと距離を変える。 */
+export const SMELL_ANIMALS = {
+  "minecraft:cow": "cow",
+  "minecraft:mooshroom": "cow",
+  "minecraft:sheep": "sheep",
+  "minecraft:pig": "pig",
+  "minecraft:chicken": "animal",
+  "minecraft:rabbit": "animal",
+  "minecraft:goat": "animal",
+  "minecraft:horse": "animal",
+  "minecraft:llama": "animal",
+};
+
+/**
+ * 匂いを嗅ぎ直す間隔(tick)。
+ * 半径200の実体探しは重いので、毎周期はやらずに間を空けて結果を使い回す。
+ */
+export const SMELL_INTERVAL = 60;
+
+/** 匂いの記憶が薄れるまで(tick)。これを過ぎたら嗅ぎ直す。 */
+export const SMELL_MEMORY = 200;
+
+/** 見通しを確かめるときに、線上を何点まで読むか。多いほど正確だが重い。 */
+export const SIGHT_SAMPLES = 20;
+
+/**
+ * この距離までは**向きに関係なく気づく**(ブロック)。
+ *
+ * 視野角だけで見分けると、真横にいる相手を見失う。しかも段階が上がるほど
+ * 視野は狭くなるので、「見つけた瞬間に視野が 180→120 度へ狭まって見失い、
+ * また見つけて…」を繰り返す（実際に机上試験で踏んだ）。
+ * すぐ横の気配は角度に関わらず分かる、として抜け道を作っておく。
+ */
+export const SIGHT_NEAR = 12;
+
+/** 警戒・発見の状態が続く時間(tick)。過ぎると1段下がる。 */
+export const ALERT_DECAY = 200;
 
 // ---------------------------------------------------------------------------
 // 家とチェスト

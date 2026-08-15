@@ -21,8 +21,12 @@ import {
 import { lureProblem, removeLure, rescueCount, sweepLures } from "./nav.js";
 import { routeOf } from "./routes.js";
 import { activeJobs, tick as scanTick } from "./scan.js";
+import { SMELL_LABEL } from "./sense.js";
 import { traitLine } from "./traits.js";
 import { alive, distXZ, groundY, hasExit, isStandable, randRange, tryDo } from "./util.js";
+
+/** 警戒の段階を人に見せる名前。 */
+const ALERT_LABEL = { calm: "通常", alert: "警戒", spotted: "発見", chase: "追跡" };
 
 /** 熊の記録。鍵は entity.id。 */
 const bears = new Map();
@@ -436,11 +440,14 @@ function showStatus(player) {
     const goal = rec.finalTarget ? `→${rec.finalTarget.x},${rec.finalTarget.z}` : "→なし";
     // 動けていない熊はひと目で分かるようにする
     const mark = rec.buried ? " §c[埋]" : (rec.stuck ?? 0) > 0 ? ` §e[止${rec.stuck}]` : "";
+    // 感覚。何を嗅ぎつけて動いているかが分かるようにする
+    const sense = `${ALERT_LABEL[rec.alert] ?? rec.alert ?? "通常"}` +
+      (rec.followingSmell ? `/${SMELL_LABEL[rec.followingSmell] ?? rec.followingSmell}の匂い` : "");
     say(player,
       `§f${id.slice(-4)} §e${STATE_LABEL[rec.state] ?? rec.state}§7 ` +
       `ルート${rec.route}(${routeOf(rec.route).label}) ${hitsOf(rec)}撃 ` +
       `略奪${rec.stolen} 破壊${rec.breakCount} 侵入${rec.housesEntered} ` +
-      `§8${where} (${dist}m) ${goal}${mark}`);
+      `§8${where} (${dist}m) ${goal} §b${sense}§r${mark}`);
     say(player, `  §7${traitLine(rec.traits)}`);
     shown++;
   }
