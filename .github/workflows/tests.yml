@@ -18,6 +18,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # check_uv.py は make_textures.py を読み込む。make_textures.py の先頭が
+      # PIL を import するので、Pillow が無いと検査そのものが動かない。
+      - name: Pillow（テクスチャの検査に要る）
+        run: python -m pip install --quiet pillow
+
       - name: 検査7本
         working-directory: bear_ai_addon
         run: python tools/run_tests.py
