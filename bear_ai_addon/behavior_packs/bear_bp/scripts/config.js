@@ -19,7 +19,7 @@
  * 分からなくなる。名乗らせて、ゲームの中から確かめられるようにしておく
  * (起動メッセージ・`/function bear_help`・`/function bear_status` に出る)。
  */
-export const VERSION = "0.7.0";
+export const VERSION = "0.8.0";
 
 /** 熊の実体。 */
 export const BEAR_TYPE = "bear:bear";
@@ -331,6 +331,21 @@ export const WINDOW_OPEN_MAX = 3;
 /** 窓を割るのにかかる時間(tick)。ドアより手間取る。 */
 export const WINDOW_BREAK_TIME = 40;
 
+/**
+ * 窓を割ろうとする確率。ドアの DOOR_BREAK_CHANCE にあたる。
+ *
+ * ドアには「開けて入る」という穏当な道があるが、**窓は割るしかない**。
+ * だから全部の窓を必ず割る作りにすると、熊が見境なく建物を壊して回る。
+ * ここを引かなかった熊は、その窓を「今はいい」と覚えて次へ行く。
+ *
+ * 実際の確率は**空腹と攻撃性で上がる**(windowBreakChance)。
+ * 0 にすると窓を1枚も割らなくなる(ドアからは入る)。
+ */
+export const WINDOW_BREAK_CHANCE = 0.7;
+
+/** 空腹が窓を割る気にどれだけ効くか。0 にすると空腹に関係なくなる。 */
+export const WINDOW_HUNGER_WEIGHT = 0.6;
+
 /** 中身を漁る対象のブロック。 */
 export const CHEST_BLOCKS = [
   "minecraft:chest", "minecraft:trapped_chest", "minecraft:barrel",
@@ -490,6 +505,21 @@ export const TRAITS = ["aggression", "bravery", "hunger", "foodSeeking", "urbanP
 
 /** 特性の分布。0.5を中心に振れる幅。1.0にすると 0〜1 の一様乱数になる。 */
 export const TRAIT_SPREAD = 0.9;
+
+/**
+ * 1周期あたり空腹がどれだけ増すか。
+ *
+ * **これが無いと空腹は減る一方**になる。食べると下がる仕組みだけがあって、
+ * 上がる仕組みが無かったので、一度食べた熊は二度と腹が減らなかった。
+ * 0.0015 で、満腹から空腹まで約6分。
+ */
+export const HUNGER_GAIN = 0.0015;
+
+/**
+ * 空腹・食料優先が「道中で家探しを始める」確率にどれだけ効くか。
+ * 大きくするほど、腹の減った熊がすぐ家へ向かう。
+ */
+export const HOUSE_SEEK_CHANCE = 0.5;
 
 // ---------------------------------------------------------------------------
 // 徘徊ルート（指示書 Route A〜E）

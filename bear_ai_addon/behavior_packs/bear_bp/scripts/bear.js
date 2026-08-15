@@ -16,7 +16,8 @@ import {
   DOOR_BREAK_CHANCE, DOOR_BREAK_TIME, ESCAPE_DISTANCE, ESCAPE_MELEE_THRESHOLD, ESCAPE_THRESHOLD,
   ESCAPE_TIME, HOME_RANGE, HOUSE_RANGE, LEG_TIMEOUT, LOOTED_MEMORY, LOOTED_MEMORY_MAX, LOOT_TIME,
   PENDING_TIMEOUT, TICK_INTERVAL, DEBUG_NAMETAG, LOG_REPEAT_INTERVAL, STUCK_REPLAN_WAIT,
-  WINDOW_BREAK_TIME,
+  WINDOW_BREAK_TIME, WINDOW_BREAK_CHANCE, WINDOW_HUNGER_WEIGHT,
+  HUNGER_GAIN, HOUSE_SEEK_CHANCE,
 } from "./config.js";
 import {
   breakDoor, breakWindow, doorStillThere, frontPoint, insidePoint, isLockedDoor, lowerDoor,
@@ -193,6 +194,10 @@ export function update(bear, rec, now) {
   rec.legTick += TICK_INTERVAL;
   forget(rec, now);
 
+  // 腹は時間で減る。**これが無いと空腹は下がる一方**で、一度食べた熊は
+  // 二度と家に入りたがらなくなる(食べると下がる仕組みしか無かった)。
+  rec.traits.hunger = clamp(rec.traits.hunger + HUNGER_GAIN, 0, 1);
+
   // 走査の返事を待ったまま固まらないようにする。
   // 返事が来ない理由(読み込み範囲から外れた・走査が打ち切られた)はこちらから
   // 分からないので、**時間で必ず待つのをやめる**。
@@ -335,7 +340,7 @@ function patrolTick(bear, rec, now, stuck) {
     }
     // 空腹・食料優先が高い個体は、道中でも家を探しはじめる
     const appetite = (rec.traits.hunger + rec.traits.foodSeeking) / 2;
-    if (chance(appetite * 0.5)) {
+    if (chance(appetite * HOUSE_SEEK_CHANCE)) {
       go(bear, rec, "SEARCH_HOUSE", "腹が減った");
       return;
     }
@@ -438,6 +443,14 @@ function searchHouseTick(bear, rec, now) {
     rec.windowSince = null;
 
     if (rec.entryKind === "window") {
+      // **窓は割るしかない。** ドアのように「開けて入る」穏当な道が無いので、
+      // 全部の窓を必ず割ると見境なく壊して回ることになる。
+      // 腹が減っているほど、気が荒いほど割る気になる。
+      if (!chance(windowBreakChance(rec))) {
+        remember(rec, pos, now); // 今はいい、と覚えて次へ
+        go(bear, rec, "PATROL", "窓を割るほど腹は減っていない");
+        return;
+      }
       // 窓は「入れる窓」だけを入口にする。腰高窓は覗けても入れない。
       const opening = windowOpening(bear.dimension, pos);
       if (!opening) {
@@ -462,6 +475,19 @@ function searchHouseTick(bear, rec, now) {
     }
   }, { radius });
   if (!started) rec.pending = false;
+}
+
+/**
+ * その熊が窓を割る気になる確率。
+ *
+ * 空腹と攻撃性で上がる。**空腹は時間で増える**ので、放っておいた熊ほど
+ * 窓を割って部屋に入りたがる（指示書の「空腹」がここで効く）。
+ */
+function windowBreakChance(rec) {
+  const drive = 0.5
+    + rec.traits.aggression * 0.5
+    + rec.traits.hunger * WINDOW_HUNGER_WEIGHT;
+  return clamp(WINDOW_BREAK_CHANCE * drive, 0, 1);
 }
 
 // ---------------------------------------------------------------------------

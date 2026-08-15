@@ -144,6 +144,11 @@ ok(stuckSeen === 0, `道中で詰まらなかった (詰まり ${stuckSeen} 回)
   const wbear = dim.spawnEntity("bear:bear", { x: BX + 3, y: G + 1, z: BZ - 10 });
   const wrec = makeRecord(wbear);
   wrec.route = "D"; // 家→家→家
+  // **窓を割るかは確率**(空腹と攻撃性で上がる)。ここで見たいのは
+  // 「割れば入れるか」なので、腹ぺこの気の荒い個体に固定して揺れを消す。
+  // 確率そのものは逆テストで別に見る。
+  wrec.traits.hunger = 1;
+  wrec.traits.aggression = 1;
 
   const wseen = new Set();
   let wlooted = -1;
@@ -218,6 +223,8 @@ ok(stuckSeen === 0, `道中で詰まらなかった (詰まり ${stuckSeen} 回)
   const b2 = dim.spawnEntity("bear:bear", { x: 403, y: G + 1, z: 390 });
   const r2 = makeRecord(b2);
   r2.route = "D"; // 家→家→家
+  r2.traits.hunger = 1;      // 窓を割るかの確率を1に固定(揺れを消す)
+  r2.traits.aggression = 1;
   for (let t = 40000; t <= 52000; t++) {
     scanTick();
     if (t % TICK_INTERVAL === 0) update(b2, r2, t);

@@ -52,7 +52,14 @@ sim.world.afterEvents.entityHitEntity.subscribe((ev) => {
   if (ev.damagingEntity?.typeId === "bear:bear") hits++;
 });
 player.health = 20;
-for (let t = 0; t < 400 && player.health > 0; t++) tick();
+// **プレイヤーは熊に張り付かせる。** 熊は湧いた直後から目印へ歩き出すので、
+// 放っておくと、記録に登録される前に間合い(攻撃性が低い個体は8m)の外へ
+// 出てしまい、たまにだけ一度も殴られない試験になる。
+// ここで見たいのは「何撃で倒れるか」なので、距離の揺れは消す。
+for (let t = 0; t < 400 && player.health > 0; t++) {
+  player.teleport({ x: bear.location.x + 1.5, y: bear.location.y, z: bear.location.z });
+  tick();
+}
 ok(hits >= BEAR_DAMAGE.minHits && hits <= BEAR_DAMAGE.maxHits,
   `プレイヤーは ${hits} 撃で倒れた(${BEAR_DAMAGE.minHits}〜${BEAR_DAMAGE.maxHits}撃)`);
 ok(bear.nameTag.includes("攻撃"), `攻撃の状態になっている (名札: ${bear.nameTag || "なし"})`);
@@ -111,7 +118,11 @@ ok(!isFood(new ItemStack("minecraft:diamond_sword")), "剣は食料でない");
 ok(!isFood(new ItemStack("minecraft:iron_ingot")), "鉄は食料でない");
 
 let broken = 0;
-const N = 2000;
+// **試行回数は余裕を持って取る。** 確率 0.3 を ±0.03 で見るなら、
+// 2000回では散らばりが 1σ=0.010 あって 3σ に届いてしまい、
+// 数十回に1回は「たまたま外れて」落ちる。落ちる試験は本物の不具合と
+// 見分けが付かないので、6σ 相当まで回数を増やす(1σ=0.005)。
+const N = 8000;
 for (let i = 0; i < N; i++) {
   const pos = { x: 500 + (i % 40), y: G + 1, z: 500 + Math.floor(i / 40) };
   dim.__putChest(pos, [new ItemStack("minecraft:iron_ingot", 1)]);

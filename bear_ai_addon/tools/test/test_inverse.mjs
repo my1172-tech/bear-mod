@@ -399,4 +399,66 @@ ok(becameStuck === true, "同じ熊でも、止まる理由が無ければ詰ま
   ok(rec.outOfRange === false, "熊の印も外れる");
 }
 
+// --- 20. 窓を割るのは確率。空腹だと増える --------------------------------
+// **窓は割るしかない**(ドアのように開けて入れない)ので、全部必ず割ると
+// 熊が見境なく建物を壊して回ることになる。確率で決め、腹の減り具合で上下させる。
+{
+  // 窓のある家をひとつ建てる
+  const HX = 8200, HZ = 8200;
+  for (let x = HX; x <= HX + 6; x++) {
+    for (let z = HZ; z <= HZ + 6; z++) {
+      for (let y = G + 1; y <= G + 4; y++) {
+        const wall = x === HX || x === HX + 6 || z === HZ || z === HZ + 6;
+        if (wall) dim.__set({ x, y, z }, "minecraft:stone_bricks");
+      }
+      dim.__set({ x, y: G + 5, z }, "minecraft:oak_planks");
+    }
+  }
+
+  // 同じ家に何度も向かわせて、割りにかかった割合を数える
+  const tryEnter = (hunger, tries) => {
+    let broke = 0;
+    for (let i = 0; i < tries; i++) {
+      const wx = HX + 3, wz = HZ;
+      dim.__set({ x: wx, y: G + 3, z: wz }, "minecraft:light_blue_stained_glass");
+      dim.__set({ x: wx, y: G + 2, z: wz }, "minecraft:stone_bricks");
+      dim.__set({ x: wx, y: G + 4, z: wz }, "minecraft:stone_bricks");
+
+      const b = dim.spawnEntity("bear:bear", { x: wx + 0.5, y: G + 1, z: wz - 2.5 });
+      const rec = makeRecord(b);
+      rec.traits.hunger = hunger;
+      rec.traits.aggression = 0.5;
+      rec.state = "SEARCH_HOUSE";
+      for (let t = 0; t < 60; t++) {
+        scanTick();
+        if (t % TICK_INTERVAL === 0) update(b, rec, 70000 + i * 100 + t);
+      }
+      if (rec.entryKind === "window" && rec.state === "ENTER_HOUSE") broke++;
+      b.remove();
+    }
+    return broke / tries;
+  };
+
+  const full = tryEnter(0, 120);   // 満腹
+  const empty = tryEnter(1, 120);  // 腹ぺこ
+  ok(empty > full,
+    `空腹なほど窓を割りにかかる (満腹 ${(full * 100) | 0}% / 腹ぺこ ${(empty * 100) | 0}%)`);
+  ok(full < 1, `満腹の熊は必ずしも割らない (${(full * 100) | 0}%)`);
+}
+
+// --- 21. 空腹は時間で増える -------------------------------------------------
+// **これが無いと空腹は下がる一方**で、一度食べた熊は二度と家に入りたがらない。
+{
+  const b = dim.spawnEntity("bear:bear", { x: 8400, y: G + 1, z: 8400 });
+  const rec = makeRecord(b);
+  rec.traits.hunger = 0;
+  for (let t = 80000; t < 82000; t++) {
+    scanTick();
+    if (t % TICK_INTERVAL === 0) update(b, rec, t);
+  }
+  ok(rec.traits.hunger > 0.1,
+    `放っておくと腹が減る (${rec.traits.hunger.toFixed(2)})`);
+  ok(rec.traits.hunger <= 1, `空腹は1を超えない (${rec.traits.hunger.toFixed(2)})`);
+}
+
 report("逆テスト");
