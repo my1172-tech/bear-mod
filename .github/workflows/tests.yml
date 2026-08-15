@@ -1,0 +1,29 @@
+name: 検査
+
+# 配らない物を配らないための見張り。README の tools/run_tests.py と同じ7本を回す。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 検査7本
+        working-directory: bear_ai_addon
+        run: python tools/run_tests.py
+
+      # 生成物のずれを見る。dist の .mcaddon が今のソースから作れることを確かめる
+      # （手で直したのに作り直し忘れた、を弾く）。
+      - name: 梱包できるか
+        working-directory: bear_ai_addon
+        run: python tools/pack.py
