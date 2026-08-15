@@ -9,6 +9,12 @@
  * 世界の作り: y<=63 は土、y>63 は空気。そこへ試験ごとにブロックを置く。
  */
 
+import {
+  BEAR_SPEED as BASE_SPEED, ROAM_SPEED, ATTACK_SPEED, FLEE_SPEED,
+} from "../../behavior_packs/bear_bp/scripts/config.js";
+
+const SPEEDS = { roam: ROAM_SPEED, hunt: ATTACK_SPEED, flee: FLEE_SPEED };
+
 const GROUND_Y = 63;
 const GROUND_BLOCK = "minecraft:grass_block";
 
@@ -306,6 +312,13 @@ export const sim = {
     return e;
   },
 
+  /**
+   * **物理だけ1tick進める。** 登録された runInterval(＝main.js の頭脳)は回さない。
+   * 速さそのものを見たいときに使う。main.js を一緒に回すと、熊のモードを
+   * 向こうが決め直してしまい、何を測っているのか分からなくなる。
+   */
+  step() { physics(); },
+
   spawnPlayer(location) {
     const dim = world.getDimension("minecraft:overworld");
     const p = new Player(dim, location);
@@ -351,8 +364,14 @@ function physics() {
 
       let target = null;
       if (mode === "hunt") {
-        const players = dim.getPlayers();
-        target = players[0] ?? null;
+        // **いちばん近いプレイヤーを狙う。** 最初の1人を掴むと、遠くの誰かへ
+        // 走り出して試験の結果が意味を失う(実機は近い相手を狙う)。
+        let best = null, bestD = Infinity;
+        for (const p of dim.getPlayers()) {
+          const d = dist(p.location, bear.location);
+          if (d < bestD) { best = p; bestD = d; }
+        }
+        target = best;
       } else {
         let best = null, bestD = Infinity;
         for (const l of dim.getEntities({ type: "bear:lure" })) {
@@ -363,7 +382,11 @@ function physics() {
       }
       if (!target) continue;
 
-      const speed = mode === "flee" ? 0.42 : 0.25;
+      // **速さは config.js の倍率をそのまま使う。** ここに数字を写すと、
+      // 調整値を変えても試験が古い速さのままになり、「襲われても速くならない」
+      // ような不具合を見逃す。
+      const mult = mode === "flee" ? SPEEDS.flee : mode === "hunt" ? SPEEDS.hunt : SPEEDS.roam;
+      const speed = BASE_SPEED * mult;
       const dx = target.location.x - bear.location.x;
       const dz = target.location.z - bear.location.z;
       const d = Math.hypot(dx, dz);

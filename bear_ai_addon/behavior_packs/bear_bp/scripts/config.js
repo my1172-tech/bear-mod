@@ -19,7 +19,7 @@
  * 分からなくなる。名乗らせて、ゲームの中から確かめられるようにしておく
  * (起動メッセージ・`/function bear_help`・`/function bear_status` に出る)。
  */
-export const VERSION = "0.6.2";
+export const VERSION = "0.7.0";
 
 /** 熊の実体。 */
 export const BEAR_TYPE = "bear:bear";
@@ -55,6 +55,24 @@ export const BEAR_WIDTH = 0.9;
 
 /** 熊の当たり判定の高さ。**bear.json の minecraft:collision_box.height と一致させること。** */
 export const BEAR_HEIGHT = 1.4;
+
+/**
+ * 場面ごとの速さの倍率。**bear.json の speed_multiplier と一致させること。**
+ *
+ * 素の移動速度(BEAR_SPEED = 0.25)に掛かる。目安:
+ *
+ *   徘徊 1.0 → 0.25   歩くプレイヤーより少し遅い。うろついている感じ
+ *   突進 1.8 → 0.45   **走るプレイヤーとほぼ同じ。** 逃げ切れない怖さが出る
+ *   逃走 1.9 → 0.475  いちばん速い。撃たれた熊は振り切って消える
+ *
+ * **突進が徘徊と大差ないと「襲われても速くならない」ように見える。**
+ * 1.3(=0.325)で作ってあったが、徘徊 0.25 との差が3割しかなく、
+ * しかも逃走 1.7 より遅かった。check_config.py が
+ * 「突進 > 徘徊」を見張る。
+ */
+export const ROAM_SPEED = 1.0;
+export const ATTACK_SPEED = 1.8;
+export const FLEE_SPEED = 1.9;
 
 // ---------------------------------------------------------------------------
 // 打撃

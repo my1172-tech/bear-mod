@@ -263,6 +263,43 @@ sim.allowSpawn("bear:lure");
   near.remove();
 }
 
+// --- 襲うときは本当に速いか -------------------------------------------------
+// **突進が徘徊と大差ないと「襲われても速くならない」ように見える。**
+// 数字の指定(config.js と bear.json)だけでなく、実際に進んだ距離で見る。
+// 向きは問わない(進んだ量だけを比べる)。
+{
+  // 世界に残っている熊と目印を片付ける
+  for (const e of dim.getEntities({ type: "bear:bear" })) e.remove();
+  for (const e of dim.getEntities({ type: "bear:lure" })) e.remove();
+  for (let t = 0; t < 60; t++) tick();
+
+  // **物理だけ回す。** main.js を一緒に回すと、向こうが熊のモードを決め直して
+  // しまい、突進を測っているつもりで徘徊を測ることになる(試験がたまに落ちた)。
+  const travel = (bear, ticks) => {
+    const from = { ...bear.location };
+    for (let t = 0; t < ticks; t++) sim.step();
+    return Math.hypot(bear.location.x - from.x, bear.location.z - from.z);
+  };
+
+  const SX = 9000, SZ = 9000;
+  const walker = dim.spawnEntity("bear:bear", { x: SX, y: G + 1, z: SZ });
+  const lure = dim.spawnEntity("bear:lure", { x: SX, y: G + 1, z: SZ + 80 });
+  walker.triggerEvent("bear:mode_roam");
+  const walked = travel(walker, 100);
+  walker.remove();
+  lure.remove();
+
+  const charger = dim.spawnEntity("bear:bear", { x: SX + 400, y: G + 1, z: SZ });
+  const target = sim.spawnPlayer({ x: SX + 400, y: G + 1, z: SZ + 80 });
+  charger.triggerEvent("bear:mode_hunt");
+  const charged = travel(charger, 100);
+
+  ok(charged > walked * 1.4,
+    `襲うときは徘徊よりはっきり速い (徘徊 ${walked.toFixed(1)}m / 突進 ${charged.toFixed(1)}m)`);
+  target.remove();
+  charger.remove();
+}
+
 report("動きの試験");
 
 function tick() {

@@ -137,6 +137,31 @@ if box.get("width", 0) >= 1.0:
     err(f"bear.json の collision_box.width が {box.get('width')}。"
         "1.0 以上だと幅1のドアを通れず、入口に食い込んで動けなくなる。1.0未満にすること")
 
+# 場面ごとの速さ。config.js と bear.json の両方に同じ数字がある。
+SPEED_KEYS = {
+    "bear:mode_roam": ("ROAM_SPEED", "minecraft:behavior.move_towards_target", "徘徊"),
+    "bear:mode_flee": ("FLEE_SPEED", "minecraft:behavior.move_towards_target", "逃走"),
+    "bear:mode_hunt": ("ATTACK_SPEED", "minecraft:behavior.melee_attack", "突進"),
+}
+for group, (name, comp, label) in SPEED_KEYS.items():
+    got = groups.get(group, {}).get(comp, {}).get("speed_multiplier")
+    want = cfg.get(name)
+    if got is None:
+        err(f"bear.json の {group} に {comp} の speed_multiplier が無い")
+    elif want is None:
+        err(f"config.js に {name} が無い")
+    elif abs(got - want) > 1e-9:
+        err(f"{label}の速さがずれている: config.js {name}={want} / bear.json {group}={got}")
+
+# **突進が徘徊より速くないと「襲われても速くならない」。**
+# 1.3 倍で作ってあったときは徘徊 1.0 との差が3割しかなく、体感できなかった。
+if cfg.get("ATTACK_SPEED", 0) < cfg.get("ROAM_SPEED", 0) * 1.4:
+    err(f"ATTACK_SPEED({cfg.get('ATTACK_SPEED')}) が ROAM_SPEED({cfg.get('ROAM_SPEED')}) の"
+        "1.4倍未満。襲われても速くなったように見えない")
+if cfg.get("FLEE_SPEED", 0) < cfg.get("ATTACK_SPEED", 0):
+    err(f"FLEE_SPEED({cfg.get('FLEE_SPEED')}) が ATTACK_SPEED({cfg.get('ATTACK_SPEED')}) より遅い。"
+        "逃げる熊が追う熊より遅いと、逃走が成立しない")
+
 base_attack = comps["minecraft:attack"]["damage"]
 if base_attack != 1:
     err(f"bear.json の minecraft:attack.damage は 1 にしておくこと（今 {base_attack}）。"
