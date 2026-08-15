@@ -14,7 +14,7 @@ import {
   WINDOW_STEP_UP,
 } from "./config.js";
 import { isDoor, isWindow } from "./routes.js";
-import { getBlock, groundY, isAir, topmost, tryDo, typeIdAt } from "./util.js";
+import { getBlock, isAir, isStandable, topmost, tryDo, typeIdAt } from "./util.js";
 
 const DIRS = [
   { dx: 1, dz: 0 }, { dx: -1, dz: 0 }, { dx: 0, dz: 1 }, { dx: 0, dz: -1 },
@@ -95,6 +95,20 @@ export function frontPoint(dimension, door) {
 // ---------------------------------------------------------------------------
 
 /**
+ * その柱で、**窓の高さから下へ**たどって最初に立てる場所を返す。
+ *
+ * **groundY を使ってはいけない。** groundY は「いちばん上のブロック」から下を
+ * 探すので、家の中では**屋根の上**を返す。それを「床」と信じると、
+ * 中の判定(屋根があるか)が必ず外れ、熊は窓を割っても入らない。
+ */
+function floorNear(dimension, x, z, fromY, span = 8) {
+  for (let y = fromY + 1; y >= fromY - span; y--) {
+    if (isStandable(dimension, { x, y, z })) return y;
+  }
+  return null;
+}
+
+/**
  * その窓から**中へ入れるか**を見て、割るべき高さを返す。入れなければ null。
  *
  * 熊は窓枠ごと腕で押し広げる。開口は**ガラスの連なりの上下 WINDOW_MARGIN(1) 段**まで。
@@ -129,7 +143,7 @@ export function windowOpening(dimension, win) {
   // 外に立ったときの足元の高さ。窓の1つ外側の柱で測る。
   let standY = null;
   for (const d of DIRS) {
-    const y = groundY(dimension, win.x + d.dx, win.z + d.dz, win.y);
+    const y = floorNear(dimension, win.x + d.dx, win.z + d.dz, win.y);
     if (y === null) continue;
     if (standY === null || Math.abs(y - glassLow) < Math.abs(standY - glassLow)) standY = y;
   }
@@ -213,7 +227,7 @@ export function windowFront(dimension, win) {
   for (const d of DIRS) {
     const x = win.x + d.dx;
     const z = win.z + d.dz;
-    const y = groundY(dimension, x, z, win.y);
+    const y = floorNear(dimension, x, z, win.y);
     if (y === null) continue;
     const top = topmost(dimension, x, z);
     const roofed = top ? top.location.y - y >= 2 : false;
@@ -229,7 +243,7 @@ export function windowInside(dimension, win) {
   for (const d of DIRS) {
     const x = win.x + d.dx * 2;
     const z = win.z + d.dz * 2;
-    const y = groundY(dimension, x, z, win.y);
+    const y = floorNear(dimension, x, z, win.y);
     if (y === null) continue;
     const top = topmost(dimension, x, z);
     if (!top) continue;

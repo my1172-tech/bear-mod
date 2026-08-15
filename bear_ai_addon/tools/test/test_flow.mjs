@@ -189,4 +189,45 @@ ok(stuckSeen === 0, `道中で詰まらなかった (詰まり ${stuckSeen} 回)
   ok(stillThere.includes("minecraft:iron_ingot"), "食料でない鉄は残っている");
 }
 
+// --- 窓のある家を2軒つづけて破る -------------------------------------------
+// **1軒目だけ入れて2軒目で固まる**、という壊れ方をしていた。
+// 窓を叩き始めた時刻を熊が持ちっぱなしで、次の窓では「まだ叩き足りない」と
+// 判定され続け、足を止めたまま動かなくなる(状態が変わると時計が0に戻るため)。
+{
+  // 2軒を探索半径(最大32)の中に置く。離しすぎると「見つけられない」で落ちて
+  // しまい、見たいこと(2軒目でも窓を割れるか)が試験できない。
+  const houses = [{ x: 400, z: 400 }, { x: 400, z: 420 }];
+  const wins = [];
+  for (const h of houses) {
+    for (let x = h.x; x <= h.x + 6; x++) {
+      for (let z = h.z; z <= h.z + 6; z++) {
+        for (let y = G + 1; y <= G + 4; y++) {
+          const wall = x === h.x || x === h.x + 6 || z === h.z || z === h.z + 6;
+          if (wall) dim.__set({ x, y, z }, "minecraft:stone_bricks");
+        }
+        dim.__set({ x, y: G + 5, z }, "minecraft:oak_planks");
+      }
+    }
+    const wx = h.x + 3, wz = h.z;
+    dim.__set({ x: wx, y: G + 3, z: wz }, "minecraft:light_blue_stained_glass");
+    dim.__putChest({ x: h.x + 3, y: G + 1, z: h.z + 4 },
+      [new ItemStack("minecraft:bread", 2)]);
+    wins.push({ x: wx, z: wz });
+  }
+
+  const b2 = dim.spawnEntity("bear:bear", { x: 403, y: G + 1, z: 390 });
+  const r2 = makeRecord(b2);
+  r2.route = "D"; // 家→家→家
+  for (let t = 40000; t <= 52000; t++) {
+    scanTick();
+    if (t % TICK_INTERVAL === 0) update(b2, r2, t);
+    sim.tick();
+  }
+
+  const broken = wins.filter((w) =>
+    dim.__typeAt({ x: w.x, y: G + 3, z: w.z }) === "minecraft:air").length;
+  ok(broken === 2, `2軒とも窓を破った (${broken} / 2軒)`);
+  ok(r2.housesEntered >= 2, `2軒とも中へ入った (${r2.housesEntered} 軒)`);
+}
+
 report("流れの試験");

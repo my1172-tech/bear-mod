@@ -320,4 +320,43 @@ ok(becameStuck === true, "同じ熊でも、止まる理由が無ければ詰ま
   ok(rec.alert === "alert", "時間が経つと1段だけ下がる");
 }
 
+// --- 18. 窓を叩き始めた時刻を持ち越しても固まらない ------------------------
+// 状態が変わると熊の時計(stateTick)は0に戻る。前の窓の時刻を持ったままだと
+// 「0 - 40 = -40 でまだ叩き足りない」と判定され続け、**足を止めたまま永久に
+// 動かなくなる**(モードが still なので詰まり判定にも掛からない)。
+{
+  const WX = 7600, WZ = 7600;
+  for (let x = WX; x <= WX + 6; x++) {
+    for (let z = WZ; z <= WZ + 6; z++) {
+      for (let y = G + 1; y <= G + 4; y++) {
+        const wall = x === WX || x === WX + 6 || z === WZ || z === WZ + 6;
+        if (wall) dim.__set({ x, y, z }, "minecraft:stone_bricks");
+      }
+      dim.__set({ x, y: G + 5, z }, "minecraft:oak_planks");
+    }
+  }
+  const wx = WX + 3, wz = WZ;
+  dim.__set({ x: wx, y: G + 3, z: wz }, "minecraft:light_blue_stained_glass");
+
+  const b = dim.spawnEntity("bear:bear", { x: wx + 0.5, y: G + 1, z: wz - 1.5 });
+  const rec = makeRecord(b);
+  const opening = windowOpening(dim, { x: wx, y: G + 3, z: wz });
+  ok(opening !== null, "窓は入口として使える");
+
+  // 窓の前に着いた状態を作り、**前の窓の時刻を持ち越させる**
+  rec.state = "ENTER_HOUSE";
+  rec.entryKind = "window";
+  rec.targetDoor = { x: wx, y: opening.y, z: wz };
+  rec.opening = opening;
+  rec.windowSince = 9999;   // 前の窓で叩き始めた時刻
+  rec.stateTick = 0;        // 状態が変わって時計が戻った
+
+  for (let t = 60000; t < 60600; t++) {
+    scanTick();
+    if (t % TICK_INTERVAL === 0) update(b, rec, t);
+  }
+  ok(dim.__typeAt({ x: wx, y: G + 3, z: wz }) === "minecraft:air",
+    "前の窓の時刻を持ち越していても、ちゃんと窓を割る");
+}
+
 report("逆テスト");

@@ -108,6 +108,7 @@ export function makeRecord(bear) {
     targetDoor: null,
     entryKind: "door",
     opening: null,
+    windowSince: null,
     targetChest: null,
     pending: false,
     pendingTick: 0,
@@ -431,6 +432,10 @@ function searchHouseTick(bear, rec, now) {
     rec.entryKind = pos.kind === "window" ? "window" : "door";
     rec.doorPlan = null;
     rec.opening = null;
+    // **窓を叩き始めた時刻も必ず捨てる。** 持ち越すと、次の窓では
+    // 状態の時計(stateTick)が0に戻っているせいで「まだ叩き足りない」と
+    // 判定され続け、熊が足を止めたまま固まる(2軒目に入れなくなる)。
+    rec.windowSince = null;
 
     if (rec.entryKind === "window") {
       // 窓は「入れる窓」だけを入口にする。腰高窓は覗けても入れない。
@@ -547,7 +552,9 @@ function enterWindowTick(bear, rec, now, stuck) {
     if (stillGlass) {
       // 叩き割るのに少し時間をかける(一瞬で消えると割った感じが出ない)。
       // 詰まっているときは待たずに割る。
-      if (rec.windowSince === undefined) {
+      // 時計が巻き戻っている(状態が変わった)ときも、叩き始めから数え直す。
+      if (rec.windowSince === null || rec.windowSince === undefined
+          || rec.windowSince > rec.stateTick) {
         rec.windowSince = rec.stateTick;
         log(rec, "窓を割りにかかる");
       }

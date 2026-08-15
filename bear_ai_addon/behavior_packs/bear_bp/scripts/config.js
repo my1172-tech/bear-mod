@@ -19,7 +19,7 @@
  * 分からなくなる。名乗らせて、ゲームの中から確かめられるようにしておく
  * (起動メッセージ・`/function bear_help`・`/function bear_status` に出る)。
  */
-export const VERSION = "0.6.0";
+export const VERSION = "0.6.1";
 
 /** 熊の実体。 */
 export const BEAR_TYPE = "bear:bear";
