@@ -13,7 +13,9 @@ import { makeRecord, setDebug, update, onHurt } from "../../behavior_packs/bear_
 import { requestScan, tick as scanTick } from "../../behavior_packs/bear_bp/scripts/scan.js";
 import { lootChest, maybeBreakChest } from "../../behavior_packs/bear_bp/scripts/loot.js";
 import { breakDoor, breakWindow, windowOpening } from "../../behavior_packs/bear_bp/scripts/house.js";
-import { checkStuck, setWaypoint, unstick } from "../../behavior_packs/bear_bp/scripts/nav.js";
+import {
+  checkStuck, lureProblem, setWaypoint, unstick,
+} from "../../behavior_packs/bear_bp/scripts/nav.js";
 import { embeddedAt, freeSpot } from "../../behavior_packs/bear_bp/scripts/util.js";
 import { decayAlert, raiseAlert, strongestSmell } from "../../behavior_packs/bear_bp/scripts/sense.js";
 import {
@@ -357,6 +359,44 @@ ok(becameStuck === true, "同じ熊でも、止まる理由が無ければ詰ま
   }
   ok(dim.__typeAt({ x: wx, y: G + 3, z: wz }) === "minecraft:air",
     "前の窓の時刻を持ち越していても、ちゃんと窓を割る");
+}
+
+// --- 19. 「動いていない範囲にいるだけ」を不具合として騒がない ---------------
+// 統合版はプレイヤーから離れたチャンクを「読み込んではいるが動かしていない」
+// 状態で持つ。そこの熊は getEntities では見つかるのに、目印を湧かせようとすると
+// 断られる。**これは不具合ではない**（熊自身もそこでは動いていない）。
+// 赤い字で出すと、本物の失敗が埋もれて見分けが付かなくなる。
+{
+  const b = dim.spawnEntity("bear:bear", { x: 8000, y: G + 1, z: 8000 });
+  const rec = makeRecord(b);
+
+  // まず正常に置けることを確かめる（＝以降の判定が「常にnull」ではない）
+  ok(setWaypoint(b, rec, { x: 8010, y: G + 1, z: 8000 }) === true, "ふつうは目印を置ける");
+  ok(lureProblem() === null, "置けたので問題は残っていない");
+  rec.lure = null;
+  rec.lureId = null;
+
+  // 動いていない範囲の断り方を再現する
+  sim.blockSpawn("bear:lure",
+    "LocationInUnloadedChunkError: Trying to access location (1, -2, 3) "
+    + "which is not in a chunk currently loaded and ticking.");
+  const placed = setWaypoint(b, rec, { x: 8010, y: G + 1, z: 8000 });
+  ok(placed === false, "動いていない範囲では目印を置けない（そこは熊も動かない）");
+  ok(rec.outOfRange === true, "その熊に印を付けて数える");
+  ok(lureProblem() === null,
+    "**不具合としては記録しない**（bear_status に赤字を出さない）");
+
+  // 本物の失敗（定義が読めない等）は今までどおり出す
+  sim.blockSpawn("bear:lure", "Failed to spawn entity bear:lure");
+  setWaypoint(b, rec, { x: 8010, y: G + 1, z: 8000 });
+  ok((lureProblem() ?? "").includes("Failed to spawn"),
+    "本物の失敗は理由を残す（黙って諦めない）");
+
+  // 直ったら取り下げる（古い失敗を出し続けない）
+  sim.allowSpawn("bear:lure");
+  ok(setWaypoint(b, rec, { x: 8010, y: G + 1, z: 8000 }) === true, "直れば置ける");
+  ok(lureProblem() === null, "直ったら古い理由を取り下げる");
+  ok(rec.outOfRange === false, "熊の印も外れる");
 }
 
 report("逆テスト");

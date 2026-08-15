@@ -18,7 +18,9 @@ import {
 import {
   STATE_LABEL, attackDamage, hitsOf, isDebug, makeRecord, onHurt, setDebug, update,
 } from "./bear.js";
-import { lureProblem, removeLure, rescueCount, sweepLures } from "./nav.js";
+import {
+  lureProblem, outOfRangeCount, removeLure, rescueCount, resetOutOfRange, sweepLures,
+} from "./nav.js";
 import { routeOf } from "./routes.js";
 import { activeJobs, tick as scanTick } from "./scan.js";
 import { SMELL_LABEL } from "./sense.js";
@@ -413,6 +415,16 @@ function showStatus(player) {
     // 目印が出ないと熊は行き先を持てない。「熊はいるのに何もしない」の正体はこれ。
     say(player, `§c目印(誘導体)を出せていません: §7${trouble}`);
   }
+
+  // ワールドが動かしていない場所にいる熊。**これは不具合ではない。**
+  // そこでは熊自身も動いていないので、近づけば動き出す。
+  let away = 0;
+  for (const rec of bears.values()) if (rec.outOfRange) away++;
+  if (away > 0) {
+    say(player, `§7${away} 頭はワールドが動かしていない範囲にいます` +
+      "（近づけば動き出します。不具合ではありません）");
+  }
+  resetOutOfRange();
   if (bears.size === 0) {
     say(player, "§7熊はいません。/function bear_spawn で出せます。");
     return;

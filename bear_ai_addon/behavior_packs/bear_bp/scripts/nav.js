@@ -16,14 +16,39 @@ import {
 import { alive, center, distXZ, embeddedAt, freeSpot, groundY, tryDo } from "./util.js";
 
 /**
- * 目印を出せなかった最後の理由。
- * 目印が出ないと熊は行き先を持てず、その場をうろつくだけになる。
- * **黙って諦めると実機で原因が追えない**ので、理由を残して bear_status に出す。
+ * 目印を出せなかった最後の理由。**本当の不具合だけを入れる。**
+ * 目印が出ないと熊は行き先を持てず、その場をうろつくだけになるので、
+ * 理由を残して bear_status に出す。
  */
 let lureTrouble = null;
 
 export function lureProblem() {
   return lureTrouble;
+}
+
+/**
+ * その失敗が「ワールドの動いている範囲(ticking area)の外にいるだけ」か。
+ *
+ * **これは不具合ではない。** 統合版はプレイヤーから離れたチャンクを
+ * 「読み込んではいるが動かしていない」状態で持つ。そこにいる熊は
+ * `getEntities` では見つかるのに、実体を湧かせようとすると断られる。
+ * 熊自身もそこでは動いていないので、目印を出す必要がそもそも無い。
+ * プレイヤーが近づけば直る。**赤い字で騒がない。**
+ */
+function isOutOfRange(e) {
+  const s = String(e);
+  return s.includes("UnloadedChunk") || s.includes("not in a chunk currently loaded");
+}
+
+/** ワールドの動いている範囲の外にいて、見送った熊の数(表示用)。 */
+let outOfRangeSeen = 0;
+export function outOfRangeCount() { return outOfRangeSeen; }
+export function resetOutOfRange() { outOfRangeSeen = 0; }
+
+/** 目印が使えた。抱えている「不具合」を取り下げる。 */
+function lureWorks(rec) {
+  rec.outOfRange = false;
+  lureTrouble = null;
 }
 
 /** その熊の目印を返す。無ければ湧かせる。 */
@@ -32,7 +57,10 @@ export function ensureLure(bear, rec) {
   // ブロック走査の返事は数tick遅れて届くので、その間に熊が死んでいることがある。
   // ここで止めないと、飼い主のいない目印が世界に溜まる。
   if (rec.gone || !alive(bear)) return null;
-  if (rec.lure && alive(rec.lure)) return rec.lure;
+  if (rec.lure && alive(rec.lure)) {
+    lureWorks(rec);
+    return rec.lure;
+  }
 
   // 保存してあるIDから拾い直す(ワールドを開き直した直後など)
   if (rec.lureId) {
@@ -41,6 +69,7 @@ export function ensureLure(bear, rec) {
     );
     if (alive(found)) {
       rec.lure = found;
+      lureWorks(rec);
       return found;
     }
   }
@@ -49,6 +78,12 @@ export function ensureLure(bear, rec) {
   try {
     lure = bear.dimension.spawnEntity(LURE_TYPE, bear.location);
   } catch (e) {
+    if (isOutOfRange(e)) {
+      // 動いていない場所の熊。数えるだけで、黙って見送る
+      rec.outOfRange = true;
+      outOfRangeSeen++;
+      return null;
+    }
     lureTrouble = String(e);
     console.warn(`[bear] 目印を出せない: ${e}`);
     return null;
@@ -57,9 +92,9 @@ export function ensureLure(bear, rec) {
     lureTrouble = "目印が湧いた直後に消えました";
     return null;
   }
-  lureTrouble = null;
   rec.lure = lure;
   rec.lureId = lure.id;
+  lureWorks(rec);
   return lure;
 }
 
@@ -91,11 +126,21 @@ export function setWaypoint(bear, rec, target) {
     goal.y = gy;
   }
 
-  const ok = tryDo("目印の移動", () => {
+  // 移動先も動いている範囲の外だと断られる。**これも不具合ではない**ので黙る。
+  let moved = false;
+  try {
     lure.teleport(center(goal), { dimension: bear.dimension });
-    return true;
-  });
-  if (!ok) return false;
+    moved = true;
+  } catch (e) {
+    if (isOutOfRange(e)) {
+      rec.outOfRange = true;
+      outOfRangeSeen++;
+      return false;
+    }
+    console.warn(`[bear] 目印を動かせない: ${e}`);
+    return false;
+  }
+  if (!moved) return false;
 
   rec.waypoint = { x: Math.floor(goal.x), y: Math.floor(goal.y), z: Math.floor(goal.z) };
   rec.finalTarget = { x: Math.floor(target.x), y: Math.floor(target.y), z: Math.floor(target.z) };
