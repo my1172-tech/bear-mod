@@ -1,0 +1,3 @@
+entity.bear:bear.name=Bear
+item.spawn_egg.entity.bear:bear.name=Spawn Bear
+entity.bear:lure.name=Bear Waypoint

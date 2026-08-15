@@ -1,0 +1,143 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "bear:bear",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false,
+      "spawn_category": "creature"
+    },
+    "components": {
+      "minecraft:type_family": { "family": ["bear", "mob"] },
+
+      "minecraft:collision_box": { "width": 0.9, "height": 1.4 },
+      "minecraft:physics": {},
+      "minecraft:pushable": { "is_pushable": true, "is_pushable_by_piston": true },
+      "minecraft:can_climb": {},
+      "minecraft:jump.static": {},
+      "minecraft:movement.basic": {},
+      "minecraft:water_movement": { "drag_factor": 0.98 },
+      "minecraft:breathable": { "total_supply": 15, "suffocate_time": 0 },
+      "minecraft:nameable": {},
+      "minecraft:knockback_resistance": { "value": 0.6 },
+      "minecraft:persistent": {},
+
+      "minecraft:health": { "value": 40, "max": 40 },
+      "minecraft:movement": { "value": 0.25 },
+      "minecraft:follow_range": { "value": 64, "max": 64 },
+      "minecraft:attack": { "damage": 1 },
+
+      "minecraft:annotation.open_door": {},
+      "minecraft:navigation.walk": {
+        "can_path_over_water": true,
+        "avoid_damage_blocks": true,
+        "can_pass_doors": true,
+        "can_open_doors": true,
+        "using_door_annotation": true
+      },
+
+      "minecraft:behavior.float": { "priority": 0 },
+      "minecraft:behavior.open_door": { "priority": 5, "close_door_after": false },
+      "minecraft:behavior.random_stroll": { "priority": 9, "speed_multiplier": 0.8 },
+      "minecraft:behavior.look_at_player": {
+        "priority": 10,
+        "look_distance": 12,
+        "look_time": { "min": 1, "max": 3 }
+      },
+      "minecraft:behavior.random_look_around": { "priority": 11 }
+    },
+
+    "component_groups": {
+      "bear:mode_roam": {
+        "minecraft:behavior.nearest_attackable_target": {
+          "priority": 3,
+          "must_see": false,
+          "must_reach": false,
+          "reselect_targets": true,
+          "scan_interval": 10,
+          "within_radius": 96,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "bear_lure" },
+              "max_dist": 96
+            }
+          ]
+        },
+        "minecraft:behavior.move_towards_target": {
+          "priority": 4,
+          "speed_multiplier": 1.0,
+          "within_radius": 1
+        }
+      },
+
+      "bear:mode_flee": {
+        "minecraft:behavior.nearest_attackable_target": {
+          "priority": 3,
+          "must_see": false,
+          "must_reach": false,
+          "reselect_targets": true,
+          "scan_interval": 10,
+          "within_radius": 128,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "bear_lure" },
+              "max_dist": 128
+            }
+          ]
+        },
+        "minecraft:behavior.move_towards_target": {
+          "priority": 4,
+          "speed_multiplier": 1.7,
+          "within_radius": 1
+        }
+      },
+
+      "bear:mode_hunt": {
+        "minecraft:behavior.nearest_attackable_target": {
+          "priority": 2,
+          "must_see": false,
+          "must_reach": false,
+          "reselect_targets": true,
+          "scan_interval": 10,
+          "set_persistent": true,
+          "within_radius": 24,
+          "entity_types": [
+            {
+              "filters": { "test": "is_family", "subject": "other", "value": "player" },
+              "max_dist": 24
+            }
+          ]
+        },
+        "minecraft:behavior.melee_attack": {
+          "priority": 3,
+          "speed_multiplier": 1.3,
+          "track_target": true
+        }
+      },
+
+      "bear:mode_still": {}
+    },
+
+    "events": {
+      "minecraft:entity_spawned": { "add": { "component_groups": ["bear:mode_roam"] } },
+
+      "bear:mode_roam": {
+        "remove": { "component_groups": ["bear:mode_hunt", "bear:mode_flee", "bear:mode_still"] },
+        "add": { "component_groups": ["bear:mode_roam"] }
+      },
+      "bear:mode_hunt": {
+        "remove": { "component_groups": ["bear:mode_roam", "bear:mode_flee", "bear:mode_still"] },
+        "add": { "component_groups": ["bear:mode_hunt"] }
+      },
+      "bear:mode_flee": {
+        "remove": { "component_groups": ["bear:mode_roam", "bear:mode_hunt", "bear:mode_still"] },
+        "add": { "component_groups": ["bear:mode_flee"] }
+      },
+      "bear:mode_still": {
+        "remove": { "component_groups": ["bear:mode_roam", "bear:mode_hunt", "bear:mode_flee"] },
+        "add": { "component_groups": ["bear:mode_still"] }
+      }
+    }
+  }
+}

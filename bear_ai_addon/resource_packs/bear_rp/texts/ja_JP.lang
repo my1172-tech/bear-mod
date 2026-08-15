@@ -1,0 +1,3 @@
+entity.bear:bear.name=熊
+item.spawn_egg.entity.bear:bear.name=熊 のスポーンエッグ
+entity.bear:lure.name=熊の目印

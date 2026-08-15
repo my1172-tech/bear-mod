@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "bear:lure",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/bear_lure"
+      },
+      "geometry": {
+        "default": "geometry.bear_lure"
+      },
+      "render_controllers": [
+        "controller.render.bear_lure"
+      ]
+    }
+  }
+}

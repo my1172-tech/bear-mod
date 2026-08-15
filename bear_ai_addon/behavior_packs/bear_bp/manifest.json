@@ -1,0 +1,36 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "熊AI v0.4.0 (BP)",
+    "description": "市街地へ侵入し、家をあさって食料を略奪する熊。野生動物シミュレーション。",
+    "uuid": "82626dba-9037-4e4d-b55a-5feb1d43733c",
+    "version": [0, 4, 0],
+    "min_engine_version": [1, 21, 80]
+  },
+  "modules": [
+    {
+      "description": "エンティティ / スポーン定義",
+      "type": "data",
+      "uuid": "c73ec801-88b1-41f0-875a-09dda2f9c359",
+      "version": [0, 4, 0]
+    },
+    {
+      "description": "熊の行動ロジック",
+      "type": "script",
+      "language": "javascript",
+      "entry": "scripts/main.js",
+      "uuid": "318e9aa5-de5e-41b4-af26-797b6930a251",
+      "version": [0, 4, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "c63d6e78-6525-4d65-b6fe-c853b5e2bf76",
+      "version": [0, 4, 0]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.0.0"
+    }
+  ]
+}

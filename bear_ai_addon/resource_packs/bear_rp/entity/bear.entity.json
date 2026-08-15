@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "bear:bear",
+      "materials": { "default": "entity_alphatest" },
+      "textures": { "default": "textures/entity/bear" },
+      "geometry": { "default": "geometry.bear" },
+      "animations": {
+        "walk": "animation.bear.walk",
+        "look": "animation.bear.look",
+        "sniff": "animation.bear.sniff",
+        "move": "controller.animation.bear.move"
+      },
+      "scripts": {
+        "animate": ["move"]
+      },
+      "render_controllers": ["controller.render.bear"],
+      "spawn_egg": { "base_color": "#5a3a1e", "overlay_color": "#2b1a0c" }
+    }
+  }
+}
