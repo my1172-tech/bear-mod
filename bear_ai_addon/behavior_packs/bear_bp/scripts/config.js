@@ -19,7 +19,7 @@
  * 分からなくなる。名乗らせて、ゲームの中から確かめられるようにしておく
  * (起動メッセージ・`/function bear_help`・`/function bear_status` に出る)。
  */
-export const VERSION = "0.8.0";
+export const VERSION = "0.9.0";
 
 /** 熊の実体。 */
 export const BEAR_TYPE = "bear:bear";
@@ -58,21 +58,47 @@ export const BEAR_HEIGHT = 1.4;
 
 /**
  * 場面ごとの速さの倍率。**bear.json の speed_multiplier と一致させること。**
- *
- * 素の移動速度(BEAR_SPEED = 0.25)に掛かる。目安:
- *
- *   徘徊 1.0 → 0.25   歩くプレイヤーより少し遅い。うろついている感じ
- *   突進 1.8 → 0.45   **走るプレイヤーとほぼ同じ。** 逃げ切れない怖さが出る
- *   逃走 1.9 → 0.475  いちばん速い。撃たれた熊は振り切って消える
- *
- * **突進が徘徊と大差ないと「襲われても速くならない」ように見える。**
- * 1.3(=0.325)で作ってあったが、徘徊 0.25 との差が3割しかなく、
- * しかも逃走 1.7 より遅かった。check_config.py が
- * 「突進 > 徘徊」を見張る。
- */
+  *
+   * 素の移動速度(BEAR_SPEED = 0.25)に掛かる。目安:
+    *
+     *   徘徊 1.0 → 0.25   歩くプレイヤーより少し遅い。うろついている感じ
+      *   逃走 FLEE_SPEED   いちばん速い。撃たれた熊は振り切って消える
+       *
+        * **突進が徘徊と大差ないと「襲われても速くならない」ように見える。**
+         * 1.3(=0.325)で作ってあったが、徘徊 0.25 との差が3割しかなく、
+          * しかも逃走より遅かった。check_config.py が
+           * 「突進 > 徘徊」を見張る。
+            */
 export const ROAM_SPEED = 1.0;
-export const ATTACK_SPEED = 1.8;
-export const FLEE_SPEED = 1.9;
+
+/**
+ * 「走るプレイヤー」の実効速度の目安。元は突進 1.8(=0.45) を
+  * 「走るプレイヤーとほぼ同じ」として調整した基準値で、それをそのまま使う。
+   */
+export const PLAYER_RUN_SPEED = 0.45;
+
+/**
+ * 突進(ATTACK)の速さ。**個体ごとにランダム**(プレイヤーが走る速さの
+  * ATTACK_SPEED_MULT_MIN〜MAX倍)。
+   *
+    * 統合版の bear.json は静的なJSONなので、連続値ではなく段階(tier)で表す。
+     * ここに並べた5段が PLAYER_RUN_SPEED の 1.5〜2.5倍(0.675〜1.125、
+      * BEAR_SPEED=0.25で割った速さの倍率)にあたる。個体ごとに湧いたときに
+       * このどれか1つが均等な乱数で選ばれ(traits.js の attackTierOf)、
+        * 熊が死ぬまで変わらない。bear.json 側は bear:mode_hunt0〜hunt4 の
+         * component_group を段の数だけ用意してあり、tools/check_config.py が
+          * ここと bear.json のずれ・段の並びを見張る。
+           */
+export const ATTACK_SPEED_MULT_MIN = 1.5;
+export const ATTACK_SPEED_MULT_MAX = 2.5;
+export const ATTACK_SPEED_TIERS = [2.7, 3.15, 3.6, 4.05, 4.5];
+
+/**
+ * 逃走(FLEE)の速さの倍率。**追う熊(突進)より遅いと逃げ切れない**ので、
+  * ATTACK_SPEED_TIERS のいちばん速い段より必ず速くしておくこと
+   * (check_config.py が見張る)。
+    */
+export const FLEE_SPEED = 4.6;
 
 // ---------------------------------------------------------------------------
 // 打撃
